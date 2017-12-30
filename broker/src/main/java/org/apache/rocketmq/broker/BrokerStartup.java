@@ -99,6 +99,7 @@ public class BrokerStartup {
             }
 
             final BrokerConfig brokerConfig = new BrokerConfig();
+            brokerConfig.setRocketmqHome("D:\\\\workspacerocketmq\\\\rocketmq\\\\distribution");
             final NettyServerConfig nettyServerConfig = new NettyServerConfig();
             final NettyClientConfig nettyClientConfig = new NettyClientConfig();
 
@@ -138,7 +139,7 @@ public class BrokerStartup {
                     + " variable in your environment to match the location of the RocketMQ installation");
                 System.exit(-2);
             }
-
+            brokerConfig.setNamesrvAddr("localhost:9876");
             String namesrvAddr = brokerConfig.getNamesrvAddr();
             if (null != namesrvAddr) {
                 try {
