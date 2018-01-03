@@ -184,7 +184,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                         defaultEventExecutorGroup,
                         new NettyEncoder(),
                         new NettyDecoder(),
-                        new IdleStateHandler(0, 0, nettyClientConfig.getClientChannelMaxIdleTimeSeconds()),
+//                        new IdleStateHandler(0, 0, nettyClientConfig.getClientChannelMaxIdleTimeSeconds()),
                         new NettyConnectManageHandler(),
                         new NettyClientHandler());
                 }
@@ -479,6 +479,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                     log.info("createChannel: begin to connect remote host[{}] asynchronously", addr);
                     cw = new ChannelWrapper(channelFuture);
                     this.channelTables.put(addr, cw);
+                    System.out.println("broker与 nameserver:" + addr + " 建立的长连接为:" + channelFuture);
                 }
             } catch (Exception e) {
                 log.error("createChannel: create channel exception", e);
@@ -494,11 +495,14 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             if (channelFuture.awaitUninterruptibly(this.nettyClientConfig.getConnectTimeoutMillis())) {
                 if (cw.isOK()) {
                     log.info("createChannel: connect remote host[{}] success, {}", addr, channelFuture.toString());
+                    System.out.println("broker启动的时候，与nameserver" + addr + "建立的长连接为： " + channelFuture);
                     return cw.getChannel();
                 } else {
+                	System.out.println("broker启动的时候，与nameserver" + addr + "建立的长连接失败啦！！！");
                     log.warn("createChannel: connect remote host[" + addr + "] failed, " + channelFuture.toString(), channelFuture.cause());
                 }
             } else {
+            	System.out.println("broker启动的时候，与nameserver" + addr + "建立的长连接超时啦！！！");
                 log.warn("createChannel: connect remote host[{}] timeout {}ms, {}", addr, this.nettyClientConfig.getConnectTimeoutMillis(),
                     channelFuture.toString());
             }
@@ -646,6 +650,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
             final String remoteAddress = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
             log.info("NETTY CLIENT PIPELINE: DISCONNECT {}", remoteAddress);
+            System.out.println(" 我抓到disconnect啦!!!");
             closeChannel(ctx.channel());
             super.disconnect(ctx, promise);
 

@@ -27,6 +27,7 @@ public class Message implements Serializable {
     private String topic;
     private int flag;
     private Map<String, String> properties;
+    //真正的消息内容，都是用字节数组来存储的
     private byte[] body;
 
     public Message() {

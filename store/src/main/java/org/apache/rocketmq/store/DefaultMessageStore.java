@@ -93,7 +93,8 @@ public class DefaultMessageStore implements MessageStore {
     private final SystemClock systemClock = new SystemClock();
 
     private final ScheduledExecutorService scheduledExecutorService =
-        Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl("StoreScheduledThread"));
+    		Executors.newSingleThreadScheduledExecutor(
+    		new ThreadFactoryImpl("StoreScheduledThread"));
     private final BrokerStatsManager brokerStatsManager;
     private final MessageArrivingListener messageArrivingListener;
     private final BrokerConfig brokerConfig;
@@ -217,12 +218,12 @@ public class DefaultMessageStore implements MessageStore {
         lockFile.getChannel().write(ByteBuffer.wrap("lock".getBytes()));
         lockFile.getChannel().force(true);
 
-        this.flushConsumeQueueService.start();
-        this.commitLog.start();
-        this.storeStatsService.start();
+        this.flushConsumeQueueService.start();  //The FlushConsumeQueueService thread will be started
+        this.commitLog.start();  //The FlushRealTimeService thread will be started
+        this.storeStatsService.start();  //The StoreStatsService thread will be started
 
         if (this.scheduleMessageService != null && SLAVE != messageStoreConfig.getBrokerRole()) {
-            this.scheduleMessageService.start();
+            this.scheduleMessageService.start();  //The ScheduleMessageTimerThread thread will be started
         }
 
         if (this.getMessageStoreConfig().isDuplicationEnable()) {
@@ -230,12 +231,12 @@ public class DefaultMessageStore implements MessageStore {
         } else {
             this.reputMessageService.setReputFromOffset(this.commitLog.getMaxOffset());
         }
-        this.reputMessageService.start();
+        this.reputMessageService.start();  //The ReputMessageService thread will be started
 
-        this.haService.start();
+        this.haService.start();  //The AcceptSocketService,HAClient,GroupTransferService thread will be started
 
         this.createTempFile();
-        this.addScheduleTask();
+        this.addScheduleTask();  //The StoreScheduledThread thread will be started
         this.shutdown = false;
     }
 
@@ -1169,33 +1170,33 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     private void addScheduleTask() {
-
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 DefaultMessageStore.this.cleanFilesPeriodically();
             }
         }, 1000 * 60, this.messageStoreConfig.getCleanResourceInterval(), TimeUnit.MILLISECONDS);
-
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 DefaultMessageStore.this.checkSelf();
             }
         }, 1, 10, TimeUnit.MINUTES);
-
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 if (DefaultMessageStore.this.getMessageStoreConfig().isDebugLockEnable()) {
                     try {
                         if (DefaultMessageStore.this.commitLog.getBeginTimeInLock() != 0) {
-                            long lockTime = System.currentTimeMillis() - DefaultMessageStore.this.commitLog.getBeginTimeInLock();
+                            long lockTime = System.currentTimeMillis() - 
+                            	DefaultMessageStore.this.commitLog.getBeginTimeInLock();
                             if (lockTime > 1000 && lockTime < 10000000) {
 
                                 String stack = UtilAll.jstack();
-                                final String fileName = System.getProperty("user.home") + File.separator + "debug/lock/stack-"
-                                    + DefaultMessageStore.this.commitLog.getBeginTimeInLock() + "-" + lockTime;
+                                final String fileName = System.getProperty("user.home") 
+                                		+ File.separator + "debug/lock/stack-"
+                                    + DefaultMessageStore.this.commitLog.getBeginTimeInLock() 
+                                    + "-" + lockTime;
                                 MixAll.string2FileNotSafe(stack, fileName);
                             }
                         }

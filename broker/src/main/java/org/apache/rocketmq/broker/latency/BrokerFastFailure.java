@@ -21,10 +21,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.apache.rocketmq.broker.BrokerController;
+import org.apache.rocketmq.common.BrokerConfig;
 import org.apache.rocketmq.common.ThreadFactoryImpl;
 import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.remoting.netty.RequestTask;
 import org.apache.rocketmq.remoting.protocol.RemotingSysResponseCode;
+import org.apache.rocketmq.store.MessageStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,15 +59,21 @@ public class BrokerFastFailure {
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
-                if (brokerController.getBrokerConfig().isBrokerFastFailureEnable()) {
+                BrokerConfig brokerConfig = brokerController.getBrokerConfig();
+				boolean brokerFastFailureEnable = brokerConfig.isBrokerFastFailureEnable();
+				System.out.println("brokerFastFailureEnable value is " + brokerFastFailureEnable);
+				if (brokerFastFailureEnable) {
                     cleanExpiredRequest();
                 }
             }
-        }, 1000, 10, TimeUnit.MILLISECONDS);
+        }, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
     private void cleanExpiredRequest() {
-        while (this.brokerController.getMessageStore().isOSPageCacheBusy()) {
+        MessageStore messageStore = this.brokerController.getMessageStore();
+		boolean osPageCacheBusy = messageStore.isOSPageCacheBusy();
+		System.out.println("osPageCacheBusy value is " + osPageCacheBusy);
+		while (osPageCacheBusy) {
             try {
                 if (!this.brokerController.getSendThreadPoolQueue().isEmpty()) {
                     final Runnable runnable = this.brokerController.getSendThreadPoolQueue().poll(0, TimeUnit.SECONDS);

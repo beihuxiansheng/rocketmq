@@ -509,6 +509,10 @@ public abstract class NettyRemotingAbstract {
             while (!this.isStopped()) {
                 try {
                     NettyEvent event = this.eventQueue.poll(3000, TimeUnit.MILLISECONDS);
+                    //关掉channel connection有两种方式
+                   	//一种是sanNotActiveTable,如果检测到有超时的,就close channel
+                    //一种是监控netty事件(我们自己重写的那些方法里面)，然后在事件(比如我们重写的exceptionCaught方法)里面去close channel
+                    //然后事件触发后,重新维护表里面的数据
                     if (event != null && listener != null) {
                         switch (event.getType()) {
                             case IDLE:

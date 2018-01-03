@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 package org.apache.rocketmq.store.config;
-
+//config 存储的配置信息
 public enum BrokerRole {
     ASYNC_MASTER,
     SYNC_MASTER,

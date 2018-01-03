@@ -79,6 +79,7 @@ public class ProducerManager {
                                 log.warn(
                                     "SCAN: remove expired channel[{}] from ProducerManager groupChannelTable, producer group name: {}",
                                     RemotingHelper.parseChannelRemoteAddr(info.getChannel()), group);
+                                //死close藏在这里面了
                                 RemotingUtil.closeChannel(info.getChannel());
                             }
                         }
