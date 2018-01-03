@@ -16,6 +16,10 @@
  */
 package org.apache.rocketmq.common.sysflag;
 
+/**
+ * 同步复制还是异步复制用的?
+ *
+ */
 public class TopicSysFlag {
 
     private final static int FLAG_UNIT = 0x1 << 0;

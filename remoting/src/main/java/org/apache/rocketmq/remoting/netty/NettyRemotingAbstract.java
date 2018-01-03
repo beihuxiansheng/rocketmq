@@ -236,6 +236,7 @@ public abstract class NettyRemotingAbstract {
                 }
             }
         } else {
+        	//对request type的异常处理工作
             String error = " request type " + cmd.getCode() + " not supported";
             final RemotingCommand response =
                 RemotingCommand.createResponseCommand(RemotingSysResponseCode.REQUEST_CODE_NOT_SUPPORTED, error);
@@ -253,8 +254,11 @@ public abstract class NettyRemotingAbstract {
      */
     public void processResponseCommand(ChannelHandlerContext ctx, RemotingCommand cmd) {
         final int opaque = cmd.getOpaque();
+        //@see NettyRemotingAbstract.invokeSyncImpl(Channel, RemotingCommand, long)
+        //responseFuture和responseTable的关系,两者是怎么实现异步变同步的,这个太重要了
         final ResponseFuture responseFuture = responseTable.get(opaque);
         if (responseFuture != null) {
+        	System.out.println("接收到响应,并且匹配上请求 ,响应号是:" + opaque +" 对应的连接是" + RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
             responseFuture.setResponseCommand(cmd);
 
             responseTable.remove(opaque);
@@ -267,7 +271,7 @@ public abstract class NettyRemotingAbstract {
             }
         } else {
             log.warn("receive response, but not matched any request, " + RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
-            System.out.println("接收到响应，但是没有匹配上任何请求  " + RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
+            System.out.println("接收到响应,但是没有匹配上任何请求 ,响应号是:" + opaque +" 对应的连接是" + RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
             System.out.println("接收到响应，但是没有匹配上任何请求  " + cmd.toString());
             log.warn(cmd.toString());
         }
@@ -339,6 +343,16 @@ public abstract class NettyRemotingAbstract {
             Entry<Integer, ResponseFuture> next = it.next();
             ResponseFuture rep = next.getValue();
 
+            //为什么这里可以这样来判断?
+            //因为我们在请求远端,并接收到结果后,立马就会把我们的这次调用情况从responseTable里面删除掉了
+            //@see NettyRemotingAbstract.invokeSyncImpl(Channel, RemotingCommand, long)
+            //@see NettyRemotingAbstract.processResponseCommand(ChannelHandlerContext, RemotingCommand)
+            //所有，如果responseTable里面有数据,就表明,这个结果发出去很久很久了,但是还没有得到响应,正常情况下,这个表里很少有数据才对
+            //所以叫ServerHouseKeeping,keeping的是自己,因为是我server发出去的请求,我自然要保证我的这次请求的情况,以及一些不良情况的处理
+            
+            //这个responseTable是很重要的,为什么呢?
+            //因为,client在发送请求的时候，会生成一个请求号给server端,server端在给client响应的时候,会带着这个请求号,然后我们client怎么知道哪个响应是我这次发出的呢?
+            //就是靠着这个请求号来区分的,所以client端在发出这个请求的时候，会先把这个请求号,放在client端的responseTable里面一份
             if ((rep.getBeginTimestamp() + rep.getTimeoutMillis() + 1000) <= System.currentTimeMillis()) {
                 rep.release();
                 it.remove();

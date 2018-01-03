@@ -113,6 +113,7 @@ public class RouteInfoManager {
             try {
                 this.lock.writeLock().lockInterruptibly();
 
+                //属于这个cluster的broker集合
                 Set<String> brokerNames = this.clusterAddrTable.get(clusterName);
                 if (null == brokerNames) {
                     brokerNames = new HashSet<String>();
@@ -122,6 +123,8 @@ public class RouteInfoManager {
 
                 boolean registerFirst = false;
 
+                //根据brokerName获取BrokerData，也就是根据brokerName获取broker的元数据信息
+                //元数据信息(它属于哪个cluster,它的brokerName,用这个brokerName的所有broker的id和address)
                 BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                 if (null == brokerData) {
                     registerFirst = true;
@@ -175,6 +178,7 @@ public class RouteInfoManager {
                     if (masterAddr != null) {
                         BrokerLiveInfo brokerLiveInfo = this.brokerLiveTable.get(masterAddr);
                         if (brokerLiveInfo != null) {
+                        	//返回结果里面，设置上master和ha的信息
                             result.setHaServerAddr(brokerLiveInfo.getHaServerAddr());
                             result.setMasterAddr(masterAddr);
                         }
@@ -424,6 +428,15 @@ public class RouteInfoManager {
         return null;
     }
 
+    /**
+     * 扫描brokerLiveTable，它里面存的是broker address <--> broker元信息
+     * 元信息：lastUpdateTimestamp,dataVersion,channel,haServerAddr
+     * 
+     * 如果里面的某个broker距上次的心跳时间超过指定时间(BROKER_CHANNEL_EXPIRED_TIME),没有再进行心跳过，那么就会从表里面移除掉这个
+     * 
+     * 同时，会发出通知，关掉nameserver和这个broker的长连接
+     * 
+     */
     public void scanNotActiveBroker() {
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
         while (it.hasNext()) {
@@ -439,6 +452,19 @@ public class RouteInfoManager {
         }
     }
 
+    /**
+     * 关闭nameserver和远端建立的长连接的时候，做各种数据清空处理工作
+     * 
+     * 1.心跳超过指定时间
+     * BrokerHousekeepingService
+     * 	2.onChannelClose
+     * 	3.onChannelException
+     * 	4.onChannelIdle
+     * 
+     * 上面四种情况，都会导致调用onChannelDestroy方法
+     * @param remoteAddr
+     * @param channel
+     */
     public void onChannelDestroy(String remoteAddr, Channel channel) {
         String brokerAddrFound = null;
         if (channel != null) {
@@ -640,6 +666,15 @@ public class RouteInfoManager {
         return topicList.encode();
     }
 
+    /**
+     * 很好的阐释了这几者的关系
+     * cluster --> brokerNameSet
+     * topicQueueTable --> topic <-->queueDataList
+     * queueDataList --> queueData
+     * queueData --> brokerName
+     * @param cluster
+     * @return
+     */
     public byte[] getTopicsByCluster(String cluster) {
         TopicList topicList = new TopicList();
         try {

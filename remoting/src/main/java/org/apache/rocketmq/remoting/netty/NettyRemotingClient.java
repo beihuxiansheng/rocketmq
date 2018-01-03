@@ -646,6 +646,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
             final String remoteAddress = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
             log.info("NETTY CLIENT PIPELINE: DISCONNECT {}", remoteAddress);
+            System.out.println(" 我抓到disconnect啦!!!");
             closeChannel(ctx.channel());
             super.disconnect(ctx, promise);
 

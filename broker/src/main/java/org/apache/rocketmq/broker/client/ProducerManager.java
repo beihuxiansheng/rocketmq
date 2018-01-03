@@ -94,6 +94,14 @@ public class ProducerManager {
         }
     }
 
+    /**
+     * 在这里面,我们只是从table里面移除掉了,但是这个channel连接还存在着,为什么不关掉这个channel长连接呢?
+     * 我猜是因为,我们有一个idlehandler，难道是通过这个来监控的吗?并在超时后关掉?
+     * 事实证明不是的
+     * 是我想错了,这个是在channel关闭的时候,或者说在channel关闭后,才进行remove的,也就是说,channel已经关闭掉了,所以我的担心是偏离方向的
+     * @param remoteAddr
+     * @param channel
+     */
     public void doChannelCloseEvent(final String remoteAddr, final Channel channel) {
         if (channel != null) {
             try {

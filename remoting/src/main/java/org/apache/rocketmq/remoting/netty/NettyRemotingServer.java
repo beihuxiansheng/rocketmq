@@ -25,6 +25,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.epoll.Epoll;
@@ -421,7 +422,18 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             super.channelRegistered(ctx);
         }
 
+        
+        
+        
+        
         @Override
+		public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+			super.disconnect(ctx, promise);
+		}
+
+
+
+		@Override
         public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
             final String remoteAddress = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
             log.info("NETTY SERVER PIPELINE: channelUnregistered, the channel[{}]", remoteAddress);
