@@ -46,7 +46,7 @@ public class NettyDecoder extends LengthFieldBasedFrameDecoder {
             }
             ByteBuffer byteBuffer = frame.nioBuffer();
             RemotingCommand decode = RemotingCommand.decode(byteBuffer);
-            System.out.println(decode);
+            System.out.println("经过解码后的RemotingCommand为：" + decode);
 			return decode;
         } catch (Exception e) {
             log.error("decode exception, " + RemotingHelper.parseChannelRemoteAddr(ctx.channel()), e);
