@@ -271,7 +271,7 @@ public abstract class NettyRemotingAbstract {
             }
         } else {
             log.warn("receive response, but not matched any request, " + RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
-            System.out.println("接收到响应,但是没有匹配上任何请求 ,响应号是:" + opaque +" 对应的连接是" + RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
+            System.out.println("接收到响应,但是没有匹配上任何请求 ,响应号是:" + opaque +" 对应的连接是" + ctx.channel());
             System.out.println("接收到响应，但是没有匹配上任何请求  " + cmd.toString());
             log.warn(cmd.toString());
         }
