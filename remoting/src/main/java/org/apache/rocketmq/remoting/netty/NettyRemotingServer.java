@@ -25,6 +25,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.epoll.Epoll;
@@ -37,9 +38,12 @@ import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
+import io.netty.util.concurrent.EventExecutor;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.cert.CertificateException;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -173,8 +177,38 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     return new Thread(r, "NettyServerCodecThread_" + this.threadIndex.incrementAndGet());
                 }
             });
-
-        ServerBootstrap childHandler =
+        ChannelInitializer<SocketChannel> childHandler2 = new ChannelInitializer<SocketChannel>() {
+		    @Override
+		    public void initChannel(SocketChannel ch) throws Exception {
+		        ch.pipeline()
+		            .addLast(defaultEventExecutorGroup, HANDSHAKE_HANDLER_NAME,
+		                new HandshakeHandler(TlsSystemConfig.tlsMode))
+		            .addLast(defaultEventExecutorGroup,
+		                new NettyEncoder(),
+		                new NettyDecoder(),
+//		                new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),
+		                new NettyConnectManageHandler(),
+		                new NettyServerHandler()
+		            );
+		    }
+		};
+		System.err.println("defaultEventExecutorGroup is " + defaultEventExecutorGroup);
+        Iterator<EventExecutor> defaultEventExecutors = defaultEventExecutorGroup.iterator();
+        while(defaultEventExecutors.hasNext()) {
+        	System.out.println("defaultEventExecutorGroup has childs is   " + defaultEventExecutors.next());
+        }
+        System.err.println("eventLoopGroupBoss is " + eventLoopGroupBoss);
+        Iterator<EventExecutor> eventLoopGroupBosss = eventLoopGroupBoss.iterator();
+        while(eventLoopGroupBosss.hasNext()) {
+        	System.out.println("eventLoopGroupBoss has childs is "+eventLoopGroupBosss.next());
+        }
+        System.err.println("eventLoopGroupSelector is " + eventLoopGroupSelector);
+        Iterator<EventExecutor> eventLoopGroupSelectors = eventLoopGroupSelector.iterator();
+        while(eventLoopGroupSelectors.hasNext()) {
+        	System.out.println("eventLoopGroupSelector has childs is "+eventLoopGroupSelectors.next());
+        }
+        System.err.println("childHandler is " + childHandler2);
+		ServerBootstrap childHandler =
             this.serverBootstrap.group(this.eventLoopGroupBoss, this.eventLoopGroupSelector)
                 .channel(useEpoll() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
                 .option(ChannelOption.SO_BACKLOG, 1024)
@@ -184,21 +218,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 .childOption(ChannelOption.SO_SNDBUF, nettyServerConfig.getServerSocketSndBufSize())
                 .childOption(ChannelOption.SO_RCVBUF, nettyServerConfig.getServerSocketRcvBufSize())
                 .localAddress(new InetSocketAddress(this.nettyServerConfig.getListenPort()))
-                .childHandler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    public void initChannel(SocketChannel ch) throws Exception {
-                        ch.pipeline()
-                            .addLast(defaultEventExecutorGroup, HANDSHAKE_HANDLER_NAME,
-                                new HandshakeHandler(TlsSystemConfig.tlsMode))
-                            .addLast(defaultEventExecutorGroup,
-                                new NettyEncoder(),
-                                new NettyDecoder(),
-//                                new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),
-                                new NettyConnectManageHandler(),
-                                new NettyServerHandler()
-                            );
-                    }
-                });
+                .childHandler(childHandler2);
 
         if (nettyServerConfig.isServerPooledByteBufAllocatorEnable()) {
             childHandler.childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
@@ -402,7 +422,18 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             super.channelRegistered(ctx);
         }
 
+        
+        
+        
+        
         @Override
+		public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+			super.disconnect(ctx, promise);
+		}
+
+
+
+		@Override
         public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
             final String remoteAddress = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
             log.info("NETTY SERVER PIPELINE: channelUnregistered, the channel[{}]", remoteAddress);

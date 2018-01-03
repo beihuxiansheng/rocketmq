@@ -79,7 +79,7 @@ public class NamesrvController {
 
         this.registerProcessor();
 
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+        this.scheduledExecutorService/*NSScheduledThread*/.scheduleAtFixedRate(new Runnable() {
 
             @Override
             public void run() {
@@ -87,7 +87,7 @@ public class NamesrvController {
             }
         }, 5, 10, TimeUnit.SECONDS);
 
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+        this.scheduledExecutorService/*NSScheduledThread*/.scheduleAtFixedRate(new Runnable() {
 
             @Override
             public void run() {

@@ -72,6 +72,7 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
                 request);
         }
 
+        //这些都什么时候，会调用到，需要自己调查了TODO
         switch (request.getCode()) {
             case RequestCode.PUT_KV_CONFIG:
                 return this.putKVConfig(ctx, request);
@@ -79,6 +80,7 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
                 return this.getKVConfig(ctx, request);
             case RequestCode.DELETE_KV_CONFIG:
                 return this.deleteKVConfig(ctx, request);
+            //这个比较核心，是register broker的
             case RequestCode.REGISTER_BROKER:
                 Version brokerVersion = MQVersion.value2Version(request.getVersion());
                 if (brokerVersion.ordinal() >= MQVersion.Version.V3_0_11.ordinal()) {
@@ -92,6 +94,7 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
                 return this.getRouteInfoByTopic(ctx, request);
             case RequestCode.GET_BROKER_CLUSTER_INFO:
                 return this.getBrokerClusterInfo(ctx, request);
+            //进行broker权限的擦除工作
             case RequestCode.WIPE_WRITE_PERM_OF_BROKER:
                 return this.wipeWritePermOfBroker(ctx, request);
             case RequestCode.GET_ALL_TOPIC_LIST_FROM_NAMESERVER:
@@ -110,6 +113,7 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
                 return this.getHasUnitSubTopicList(ctx, request);
             case RequestCode.GET_HAS_UNIT_SUB_UNUNIT_TOPIC_LIST:
                 return this.getHasUnitSubUnUnitTopicList(ctx, request);
+            //更新nameserver的配置，什么情况下会执行呢？
             case RequestCode.UPDATE_NAMESRV_CONFIG:
                 return this.updateConfig(ctx, request);
             case RequestCode.GET_NAMESRV_CONFIG:
@@ -235,6 +239,10 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
             topicConfigWrapper.getDataVersion().setTimestamp(0);
         }
 
+        /**
+         * 注册broker的topic信息
+         * 构建或者更新BrokerLiveInfo的时间戳
+         */
         RegisterBrokerResult result = this.namesrvController.getRouteInfoManager().registerBroker(
             requestHeader.getClusterName(),
             requestHeader.getBrokerAddr(),
@@ -373,6 +381,7 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
         }
 
         response.setCode(ResponseCode.QUERY_NOT_FOUND);
+        //Reamrk的一个有效应用
         response.setRemark("No config item, Namespace: " + requestHeader.getNamespace());
         return response;
     }
@@ -485,10 +494,12 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
         String content = this.namesrvController.getConfiguration().getAllConfigsFormatString();
         if (content != null && content.length() > 0) {
             try {
+            	//直接String.getBytes(CHARSET)获得到字节
                 response.setBody(content.getBytes(MixAll.DEFAULT_CHARSET));
             } catch (UnsupportedEncodingException e) {
                 log.error("getConfig error, ", e);
                 response.setCode(ResponseCode.SYSTEM_ERROR);
+                //Remark的另一个有效应用
                 response.setRemark("UnsupportedEncodingException " + e);
                 return response;
             }

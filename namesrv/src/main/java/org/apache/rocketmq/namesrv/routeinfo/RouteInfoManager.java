@@ -113,6 +113,7 @@ public class RouteInfoManager {
             try {
                 this.lock.writeLock().lockInterruptibly();
 
+                //属于这个cluster的broker集合
                 Set<String> brokerNames = this.clusterAddrTable.get(clusterName);
                 if (null == brokerNames) {
                     brokerNames = new HashSet<String>();
@@ -122,12 +123,15 @@ public class RouteInfoManager {
 
                 boolean registerFirst = false;
 
+                //根据brokerName获取BrokerData，也就是根据brokerName获取broker的元数据信息
+                //元数据信息(它属于哪个cluster,它的brokerName,用这个brokerName的所有broker的id和address)
                 BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                 if (null == brokerData) {
                     registerFirst = true;
                     brokerData = new BrokerData(clusterName, brokerName, new HashMap<Long, String>());
                     this.brokerAddrTable.put(brokerName, brokerData);
                 }
+                //broker的master和slave应该有相同的brokername，但是它们的brokerId应该不同，以此来区分是master broker还是slave broker
                 String oldAddr = brokerData.getBrokerAddrs().put(brokerId, brokerAddr);
                 registerFirst = registerFirst || (null == oldAddr);
 
@@ -138,6 +142,8 @@ public class RouteInfoManager {
                         ConcurrentMap<String, TopicConfig> tcTable =
                             topicConfigWrapper.getTopicConfigTable();
                         if (tcTable != null) {
+                        	//循环topic，由broker带来的属于自己(broker)的topic，然后根据brokername，topicname，queuedata来确定一个唯一值
+                        	//即：在同一个topic下的，同一个brokername下的queuedata应该只有一个
                             for (Map.Entry<String, TopicConfig> entry : tcTable.entrySet()) {
                                 this.createAndUpdateQueueData(brokerName, entry.getValue());
                             }
@@ -145,6 +151,8 @@ public class RouteInfoManager {
                     }
                 }
 
+                //这里为什么每次都要重新new一个新的BrokerLiveInfo然后进行put呢？
+                //因为BrokerLiveInfo里面有一个lastUpdateTimestamp属性，这个每次broker来向nameserver注册的时候，这个值是要更新的
                 BrokerLiveInfo prevBrokerLiveInfo = this.brokerLiveTable.put(brokerAddr,
                     new BrokerLiveInfo(
                         System.currentTimeMillis(),
@@ -153,6 +161,7 @@ public class RouteInfoManager {
                         haServerAddr));
                 if (null == prevBrokerLiveInfo) {
                     log.info("new broker registered, {} HAServer: {}", brokerAddr, haServerAddr);
+                    System.out.println("new broker registered, brokerAddr is " + brokerAddr + " and HAServer is " + haServerAddr);
                 }
 
                 if (filterServerList != null) {
@@ -164,10 +173,12 @@ public class RouteInfoManager {
                 }
 
                 if (MixAll.MASTER_ID != brokerId) {
+                	//如果此时来nameserver注册的不是master broker的情况
                     String masterAddr = brokerData.getBrokerAddrs().get(MixAll.MASTER_ID);
                     if (masterAddr != null) {
                         BrokerLiveInfo brokerLiveInfo = this.brokerLiveTable.get(masterAddr);
                         if (brokerLiveInfo != null) {
+                        	//返回结果里面，设置上master和ha的信息
                             result.setHaServerAddr(brokerLiveInfo.getHaServerAddr());
                             result.setMasterAddr(masterAddr);
                         }
@@ -193,6 +204,7 @@ public class RouteInfoManager {
     }
 
     private void createAndUpdateQueueData(final String brokerName, final TopicConfig topicConfig) {
+    	//创建一个新的QueueData,更准确的说应该是Queue的元数据(元 data)
         QueueData queueData = new QueueData();
         queueData.setBrokerName(brokerName);
         queueData.setWriteQueueNums(topicConfig.getWriteQueueNums());
@@ -200,15 +212,19 @@ public class RouteInfoManager {
         queueData.setPerm(topicConfig.getPerm());
         queueData.setTopicSynFlag(topicConfig.getTopicSysFlag());
 
+        //根据topic name从topicQueueTable获取存在这个topic table里的QueueData list
         List<QueueData> queueDataList = this.topicQueueTable.get(topicConfig.getTopicName());
         if (null == queueDataList) {
+        	//如果table里面啥也没有，就new一个list出来，然后把刚才创建的QueueData添加到这个list里面
             queueDataList = new LinkedList<QueueData>();
             queueDataList.add(queueData);
             this.topicQueueTable.put(topicConfig.getTopicName(), queueDataList);
             log.info("new topic registered, {} {}", topicConfig.getTopicName(), queueData);
+            System.out.println("new topic registered, topicName is " + topicConfig.getTopicName() + "and queueDatais " + queueData + "");
         } else {
             boolean addNewOne = true;
 
+            //如果table里面有QueueData数据，就循环这个table，拿table里面已经存在的值和新来的要存的这个QueueData来作比较
             Iterator<QueueData> it = queueDataList.iterator();
             while (it.hasNext()) {
                 QueueData qd = it.next();
@@ -216,13 +232,19 @@ public class RouteInfoManager {
                     if (qd.equals(queueData)) {
                         addNewOne = false;
                     } else {
+                    	//或者更准确的说是topic里面的QueueData list change了吧
                         log.info("topic changed, {} OLD: {} NEW: {}", topicConfig.getTopicName(), qd,
                             queueData);
+                        System.out.println("topic changed!");
+                        //如果说新来的，想要添加的Queue 的元数据，和已经存在的元数据list里面的某一项，它们的brokername相同，但是配置确不同，也就是
                         it.remove();
                     }
                 }
             }
 
+            //总结一下就是：
+            //同一个topic下的queue data list，这些list里面，queue data两两之间，它们的brokername不能有相同,如果有相同的，那么要么更新，要么queuedata本身也相同，就不处理了
+            //broker queuedata topic三者合起来应该唯一
             if (addNewOne) {
                 queueDataList.add(queueData);
             }
@@ -406,6 +428,15 @@ public class RouteInfoManager {
         return null;
     }
 
+    /**
+     * 扫描brokerLiveTable，它里面存的是broker address <--> broker元信息
+     * 元信息：lastUpdateTimestamp,dataVersion,channel,haServerAddr
+     * 
+     * 如果里面的某个broker距上次的心跳时间超过指定时间(BROKER_CHANNEL_EXPIRED_TIME),没有再进行心跳过，那么就会从表里面移除掉这个
+     * 
+     * 同时，会发出通知，关掉nameserver和这个broker的长连接
+     * 
+     */
     public void scanNotActiveBroker() {
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
         while (it.hasNext()) {
@@ -415,11 +446,25 @@ public class RouteInfoManager {
                 RemotingUtil.closeChannel(next.getValue().getChannel());
                 it.remove();
                 log.warn("The broker channel expired, {} {}ms", next.getKey(), BROKER_CHANNEL_EXPIRED_TIME);
+                System.out.println("The broker channel expired " + next.getKey() + " cao print !!!");
                 this.onChannelDestroy(next.getKey(), next.getValue().getChannel());
             }
         }
     }
 
+    /**
+     * 关闭nameserver和远端建立的长连接的时候，做各种数据清空处理工作
+     * 
+     * 1.心跳超过指定时间
+     * BrokerHousekeepingService
+     * 	2.onChannelClose
+     * 	3.onChannelException
+     * 	4.onChannelIdle
+     * 
+     * 上面四种情况，都会导致调用onChannelDestroy方法
+     * @param remoteAddr
+     * @param channel
+     */
     public void onChannelDestroy(String remoteAddr, Channel channel) {
         String brokerAddrFound = null;
         if (channel != null) {
@@ -621,6 +666,15 @@ public class RouteInfoManager {
         return topicList.encode();
     }
 
+    /**
+     * 很好的阐释了这几者的关系
+     * cluster --> brokerNameSet
+     * topicQueueTable --> topic <-->queueDataList
+     * queueDataList --> queueData
+     * queueData --> brokerName
+     * @param cluster
+     * @return
+     */
     public byte[] getTopicsByCluster(String cluster) {
         TopicList topicList = new TopicList();
         try {

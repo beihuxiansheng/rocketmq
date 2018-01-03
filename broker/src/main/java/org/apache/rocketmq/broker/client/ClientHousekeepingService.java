@@ -26,7 +26,22 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.remoting.ChannelEventListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+/**
+ * broker模块里
+ * 命名为ClientHouseKeeping的原因,谁是broker的client呢,那么很明显，consumer和producer都是broker的client呢
+ * 所以,这个keeping,keeping的就是broker保存的关于producer和consumer的相关的信息
+ * 
+ * 其实在rocketmq里面，还添加了filterServer的管理，这个我猜是在某个版本之后加上的
+ * 
+ * 
+ * 这里面最后所做的唯一的一个操作就是：doChannelCloseEvent
+ * 
+ * 实现的原理也是一样的,一个线程监控着某个队列，如果这个队列里面有值，就立马进行处理了
+ * 而往这个队列里面存值的操作是在channelActive   channelInactive   channelException等等自己实现的方法里面
+ * 
+ * 它算是一个维护状态信息的线程吧
+ *
+ */
 public class ClientHousekeepingService implements ChannelEventListener {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private final BrokerController brokerController;

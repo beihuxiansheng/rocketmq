@@ -28,6 +28,9 @@ public class DataVersion extends RemotingSerializable {
         this.counter.set(dataVersion.counter.get());
     }
 
+    /**
+     * version的一种简单实现
+     */
     public void nextVersion() {
         this.timestamp = System.currentTimeMillis();
         this.counter.incrementAndGet();

@@ -125,6 +125,10 @@ public class MixAll {
         }
     }
 
+    /**
+     * Mbean的第一次使用
+     * @return
+     */
     public static long getPID() {
         String processName = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
         if (processName != null && processName.length() > 0) {
@@ -138,6 +142,13 @@ public class MixAll {
         return 0;
     }
 
+    /**
+     * 把字符串存进file里面
+     * 当然，rocketmq里面考虑了很多东西了，不只是存进去这么简单
+     * @param str
+     * @param fileName
+     * @throws IOException
+     */
     public static void string2File(final String str, final String fileName) throws IOException {
 
         String tmpFile = fileName + ".tmp";
@@ -288,6 +299,11 @@ public class MixAll {
         return properties;
     }
 
+    /**
+     * object2Properties,第一次遇见了,利用的还是反射
+     * @param object
+     * @return
+     */
     public static Properties object2Properties(final Object object) {
         Properties properties = new Properties();
 
@@ -314,6 +330,11 @@ public class MixAll {
         return properties;
     }
 
+    /**
+     * properties --> object 也是利用反射了
+     * @param p
+     * @param object
+     */
     public static void properties2Object(final Properties p, final Object object) {
         Method[] methods = object.getClass().getMethods();
         for (Method method : methods) {
