@@ -31,6 +31,15 @@ import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ *	 4 				 4
+	length 		header length 		header data 		body data
+	1. 大端 4 个字节整数，等于 2、3、4 长度总和
+	2. 大端 4 个字节整数，等于 3 的长度
+	3. 使用 json 序列化数据
+	4. 应用自定义二进制序列化数据
+ *
+ */
 public class RemotingCommand {
     public static final String SERIALIZE_TYPE_PROPERTY = "rocketmq.serialize.type";
     public static final String SERIALIZE_TYPE_ENV = "ROCKETMQ_SERIALIZE_TYPE";
@@ -143,6 +152,7 @@ public class RemotingCommand {
 
     public static RemotingCommand decode(final ByteBuffer byteBuffer) {
         int length = byteBuffer.limit();
+        System.out.println("解码操作,去掉第一段的总长度占位符后的 ByteBuffer limit size is " + length );
         int oriHeaderLen = byteBuffer.getInt();
         int headerLength = getHeaderLength(oriHeaderLen);
 
@@ -152,6 +162,7 @@ public class RemotingCommand {
         RemotingCommand cmd = headerDecode(headerData, getProtocolType(oriHeaderLen));
 
         int bodyLength = length - 4 - headerLength;
+        System.out.println("解码操作,去掉第一段总长度占位符以及header头部占位符以及headerData长度后的 ByteBuffer limit size is " + length );
         byte[] bodyData = null;
         if (bodyLength > 0) {
             bodyData = new byte[bodyLength];
@@ -325,6 +336,13 @@ public class RemotingCommand {
         return name;
     }
 
+    /**
+     * 
+     * |<--------4-------->|<--------4-------->|<----------------->|<----------------->|
+     * 		   length			header length		header data			body data
+     * 
+     * @return
+     */
     public ByteBuffer encode() {
         // 1> header length size
         int length = 4;
@@ -339,17 +357,39 @@ public class RemotingCommand {
         }
 
         ByteBuffer result = ByteBuffer.allocate(4 + length);
+        System.out.println("开始编码数据的时候,申请的4段总长度为: " + 4 + length);
 
+         /**
+         * 这里直接用result.putInt(length)
+         * 而参数length又是header length size + header data size + body data size(3者的和)
+         * 所以如果从这个result直接获取Int的话,也就是   result.getInt(),那么就获得到了上面所说的3者的和了
+         */
         // length
+        /*
+         * |<--------4-------->|
+         * 		   length
+         */
         result.putInt(length);
 
         // header length
+        /*
+         * |<--------4-------->|
+         * 		header length
+         */
         result.put(markProtocolType(headerData.length, serializeTypeCurrentRPC));
 
         // header data
+        /*
+         * |<----------------->|
+         * 		header data
+         */
         result.put(headerData);
 
         // body data;
+        /*
+         * |<----------------->|
+         * 		body data
+         */
         if (this.body != null) {
             result.put(this.body);
         }

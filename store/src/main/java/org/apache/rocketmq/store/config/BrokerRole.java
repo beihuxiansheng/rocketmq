@@ -16,8 +16,13 @@
  */
 package org.apache.rocketmq.store.config;
 //config 存储的配置信息
+//add by Hongbo Cao BrokerRole
 public enum BrokerRole {
+	//异步复制主节点
     ASYNC_MASTER,
+    //同步双写主节点
     SYNC_MASTER,
+    //备节点
     SLAVE;
+	//其实，这些工具的写法也基本一致，都是先做一些检查，最后运行 Java 程序，JVM 系统上的应用应该差不多都这样
 }

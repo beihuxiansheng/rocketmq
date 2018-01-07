@@ -40,6 +40,8 @@ import org.slf4j.LoggerFactory;
  * 而往这个队列里面存值的操作是在channelActive   channelInactive   channelException等等自己实现的方法里面
  * 
  * 它算是一个维护状态信息的线程吧
+ * 
+ * add by Hongbo Cao ClientHousekeepingService
  *
  */
 public class ClientHousekeepingService implements ChannelEventListener {

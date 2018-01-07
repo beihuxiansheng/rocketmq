@@ -61,7 +61,7 @@ public class BrokerFastFailure {
             public void run() {
                 BrokerConfig brokerConfig = brokerController.getBrokerConfig();
 				boolean brokerFastFailureEnable = brokerConfig.isBrokerFastFailureEnable();
-				System.out.println("brokerFastFailureEnable value is " + brokerFastFailureEnable);
+//				System.out.println("brokerFastFailureEnable value is " + brokerFastFailureEnable);
 				if (brokerFastFailureEnable) {
                     cleanExpiredRequest();
                 }
@@ -72,7 +72,7 @@ public class BrokerFastFailure {
     private void cleanExpiredRequest() {
         MessageStore messageStore = this.brokerController.getMessageStore();
 		boolean osPageCacheBusy = messageStore.isOSPageCacheBusy();
-		System.out.println("osPageCacheBusy value is " + osPageCacheBusy);
+//		System.out.println("osPageCacheBusy value is " + osPageCacheBusy);
 		while (osPageCacheBusy) {
             try {
                 if (!this.brokerController.getSendThreadPoolQueue().isEmpty()) {
