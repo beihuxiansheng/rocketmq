@@ -20,6 +20,7 @@ import java.util.HashSet;
 
 public class MessageConst {
     public static final String PROPERTY_KEYS = "KEYS";
+    //RocketMQ 在 Topic 下面又分了一层 Tag，用于表示消息类别，可以用来过滤，但是顺序性还是以 Topic 来看
     public static final String PROPERTY_TAGS = "TAGS";
     public static final String PROPERTY_WAIT_STORE_MSG_OK = "WAIT";
     public static final String PROPERTY_DELAY_TIME_LEVEL = "DELAY";

@@ -343,6 +343,7 @@ public abstract class NettyRemotingAbstract {
             Entry<Integer, ResponseFuture> next = it.next();
             ResponseFuture rep = next.getValue();
 
+            //add by Hongbo Cao NettyRemotingAbstract
             //为什么这里可以这样来判断?
             //因为我们在请求远端,并接收到结果后,立马就会把我们的这次调用情况从responseTable里面删除掉了
             //@see NettyRemotingAbstract.invokeSyncImpl(Channel, RemotingCommand, long)

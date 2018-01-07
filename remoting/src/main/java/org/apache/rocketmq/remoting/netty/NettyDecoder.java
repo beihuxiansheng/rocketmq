@@ -38,6 +38,7 @@ public class NettyDecoder extends LengthFieldBasedFrameDecoder {
 
     @Override
     public Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
+    	System.out.println("解码第一步,收到的Netty的ByteBuf为: " + in);
         ByteBuf frame = null;
         try {
             frame = (ByteBuf) super.decode(ctx, in);

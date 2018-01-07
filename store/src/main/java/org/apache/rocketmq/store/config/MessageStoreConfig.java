@@ -19,13 +19,22 @@ package org.apache.rocketmq.store.config;
 import java.io.File;
 import org.apache.rocketmq.common.annotation.ImportantField;
 import org.apache.rocketmq.store.ConsumeQueue;
-
+/**
+ * 非常重要的一个类
+ * config类里面的属性参数大多数都可以通过在配置文件中自己定制化,来覆盖一些默认的值
+ * 
+ * add by Hongbo Cao MessageStoreConfig
+ * @author caohb3
+ *
+ */
 public class MessageStoreConfig {
     //The root directory in which the log data is kept
+	//	eg:/home/arnes/alibaba-rocketmq/data/store-a-async
     @ImportantField
     private String storePathRootDir = System.getProperty("user.home") + File.separator + "store";
 
     //The directory in which the commitlog is kept
+    //	eg:/home/arnes/alibaba-rocketmq/data/store-a-async/commitlog
     @ImportantField
     private String storePathCommitLog = System.getProperty("user.home") + File.separator + "store"
         + File.separator + "commitlog";

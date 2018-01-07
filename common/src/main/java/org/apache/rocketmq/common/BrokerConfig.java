@@ -25,7 +25,11 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-
+/**
+ * add by Hongbo Cao BrokerConfig
+ * config类里面的属性,基本都可以在启动的时候,自己重新定义值
+ *
+ */
 public class BrokerConfig {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.COMMON_LOGGER_NAME);
 

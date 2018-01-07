@@ -35,6 +35,16 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * RocketMQ 执行过滤是在 Broker 端，Broker 所在的机器会启动多个 FilterServer 过滤进程；
+ * Consumer 启动后，会向 FilterServer 上传一个过滤的 Java 类；Consumer 从 FilterServer 拉消息，FilterServer 将请求转发给 Broker，
+ * FilterServer 从 Broker 收到消息后，按照 Consumer 上传的 Java 过滤程序做过滤，过滤完成后返回给 Consumer。
+ * 这种过滤方法可以节省网络流量，但是增加了 Broker 的负担。
+ * 可惜我没有实验出来使用过滤的效果，即使是用 github wiki 上的例子8也没成功，不纠结了。
+ * RocketMQ 的按 Tag 过滤的功能也是在 Broker 上做的过滤，能用，是个很方便的功能
+
+ *
+ */
 public class FilterServerManager {
 
     public static final long FILTER_SERVER_MAX_IDLE_TIME_MILLS = 30000;

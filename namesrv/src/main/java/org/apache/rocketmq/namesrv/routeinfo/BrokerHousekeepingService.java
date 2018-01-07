@@ -31,6 +31,8 @@ import org.slf4j.LoggerFactory;
  * 
  * 
  * 这个是nameserver的houseKeeping,其他的模块有自己的houseKeeping了,但是原理都是差不多的,也就是通过队列来进行通信
+ * 
+ * add by Hongbo Cao BrokerHousekeepingService
  *
  */
 public class BrokerHousekeepingService implements ChannelEventListener {

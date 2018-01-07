@@ -47,6 +47,10 @@ public abstract class ConfigManager {
 
     public abstract String configFilePath();
 
+    /**
+     * 加载备份文件
+     * @return
+     */
     private boolean loadBak() {
         String fileName = null;
         try {
