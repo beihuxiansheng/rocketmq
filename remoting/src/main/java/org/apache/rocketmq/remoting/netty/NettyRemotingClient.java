@@ -479,7 +479,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                     log.info("createChannel: begin to connect remote host[{}] asynchronously", addr);
                     cw = new ChannelWrapper(channelFuture);
                     this.channelTables.put(addr, cw);
-                    System.out.println("broker与 nameserver:" + addr + " 建立的长连接为:" + channelFuture);
+                    System.out.println("client与 远端:" + addr + " 建立的长连接为:" + channelFuture);
                 }
             } catch (Exception e) {
                 log.error("createChannel: create channel exception", e);
@@ -495,14 +495,14 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             if (channelFuture.awaitUninterruptibly(this.nettyClientConfig.getConnectTimeoutMillis())) {
                 if (cw.isOK()) {
                     log.info("createChannel: connect remote host[{}] success, {}", addr, channelFuture.toString());
-                    System.out.println("broker启动的时候，与nameserver" + addr + "建立的长连接为： " + channelFuture);
+                    System.out.println("client启动的时候，与远端: " + addr + " 建立的长连接为： " + channelFuture);
                     return cw.getChannel();
                 } else {
-                	System.out.println("broker启动的时候，与nameserver" + addr + "建立的长连接失败啦！！！");
+                	System.out.println("client启动的时候，与远端: " + addr + " 建立的长连接失败啦！！！");
                     log.warn("createChannel: connect remote host[" + addr + "] failed, " + channelFuture.toString(), channelFuture.cause());
                 }
             } else {
-            	System.out.println("broker启动的时候，与nameserver" + addr + "建立的长连接超时啦！！！");
+            	System.out.println("client启动的时候，与远端: " + addr + " 建立的长连接超时啦！！！");
                 log.warn("createChannel: connect remote host[{}] timeout {}ms, {}", addr, this.nettyClientConfig.getConnectTimeoutMillis(),
                     channelFuture.toString());
             }

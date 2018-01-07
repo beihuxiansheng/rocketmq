@@ -52,7 +52,7 @@ public class Producer {
         producer.setNamesrvAddr("localhost:9876");
         producer.start();
 
-//        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 100000; i++) {
             try {
 
                 /*
@@ -69,11 +69,13 @@ public class Producer {
                 SendResult sendResult = producer.send(msg);
 
                 System.out.printf("%s%n", sendResult);
+                System.out.println("producer端成功的接收到远端发送过来的请求啦!那么就表明这次消息发送成功!");
+                Thread.sleep(5000);
             } catch (Exception e) {
                 e.printStackTrace();
                 Thread.sleep(1000);
             }
-//        }
+        }
 
         /*
          * Shut down once the producer instance is not longer in use.
