@@ -41,34 +41,48 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sun.nio.ch.DirectBuffer;
 
+/**
+ * MappedFile由MappedFileQueue管理
+ * 了解RocketMQ的都知道,它会保存所有的消息到本地文件
+ * 每个 MappedFile 统一文件大小
+ * 这个文件就是 MappedFile,每一个文件对应一个MappedFile,默认情况下大小位1g
+ * 
+ * 
+ * 对于 commitlog,consumequeue,index三类大文件进行磁盘读写操作,均是通过 MapedFile 类来完成
+ * 这个类相当于MappedByteBuffer的包装类
+ * 
+ * CommitLog : MappedFileQueue : MappedFile = 1 : 1 : N
+ *
+ */
 public class MappedFile extends ReferenceResource {
-    public static final int OS_PAGE_SIZE = 1024 * 4;
+    public static final int OS_PAGE_SIZE = 1024 * 4;//4k,默认的页大小
     protected static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
-    private static final AtomicLong TOTAL_MAPPED_VIRTUAL_MEMORY = new AtomicLong(0);
+    private static final AtomicLong TOTAL_MAPPED_VIRTUAL_MEMORY = new AtomicLong(0);//JVM中映射的虚拟内存总大小  
 
-    private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
-    protected final AtomicInteger wrotePosition = new AtomicInteger(0);
+    private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);//JVM中mmap的数量  
+    protected final AtomicInteger wrotePosition = new AtomicInteger(0);//当前写文件的位置
     //ADD BY ChenYang
     protected final AtomicInteger committedPosition = new AtomicInteger(0);
     private final AtomicInteger flushedPosition = new AtomicInteger(0);
-    protected int fileSize;
-    protected FileChannel fileChannel;
+    protected int fileSize;//映射文件的大小
+    protected FileChannel fileChannel;//映射的fileChannel对象
     /**
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
      */
     protected ByteBuffer writeBuffer = null;
     protected TransientStorePool transientStorePool = null;
-    private String fileName;
-    private long fileFromOffset;
-    private File file;
-    private MappedByteBuffer mappedByteBuffer;
-    private volatile long storeTimestamp = 0;
-    private boolean firstCreateInQueue = false;
+    private String fileName;//映射的文件名
+    private long fileFromOffset;//映射的起始偏移量,该字段代表了这个文件在queue中的偏移量,单看这个字段很难明白什么意思,如果联系上MapedFileQueue来看的话,就能明白了;比如0:表示queue中的第一个文件;1024表示queue中的第二个文件(假设fileSize为1024)
+    private File file;//映射的文件
+    private MappedByteBuffer mappedByteBuffer;//映射的内存对象,使用非堆区内存;创建文件,写入,提交,读取,释放,关闭等功能
+    private volatile long storeTimestamp = 0;//最后一条消息保存时间 
+    private boolean firstCreateInQueue = false;//是不是第一个创建的,一个broker里的一个MappedFileQueue里面维护着所有的由mappedfile组成的列表(链条),这个链条里面的第一个mappedfile的这个属性为true
 
     public MappedFile() {
     }
 
+    //创建mappedfile文件
     public MappedFile(final String fileName, final int fileSize) throws IOException {
         init(fileName, fileSize);
     }
@@ -157,11 +171,14 @@ public class MappedFile extends ReferenceResource {
         this.fileFromOffset = Long.parseLong(this.file.getName());
         boolean ok = false;
 
-        ensureDirOK(this.file.getParent());
+        ensureDirOK(this.file.getParent());//创建commitlog目录
 
         try {
-            this.fileChannel = new RandomAccessFile(this.file, "rw").getChannel();
-            this.mappedByteBuffer = this.fileChannel.map(MapMode.READ_WRITE, 0, fileSize);
+        	//这两个都是与文件对应的mappedfile对象属性变量
+            this.fileChannel = new RandomAccessFile(this.file, "rw").getChannel();//真正的创建file,但是创建出来的file size为0
+            //java.nio.DirectByteBuffer[pos=0 lim=fileSize cap=fileSize]
+            this.mappedByteBuffer = this.fileChannel.map(MapMode.READ_WRITE, 0, fileSize);//走完这一步后,创建的file的size才由0到fileSize
+            //这两个是rocketmq系统的共享静态变量，用来标示虚拟内存使用情况和文件数量
             TOTAL_MAPPED_VIRTUAL_MEMORY.addAndGet(fileSize);
             TOTAL_MAPPED_FILES.incrementAndGet();
             ok = true;
@@ -198,6 +215,12 @@ public class MappedFile extends ReferenceResource {
         return appendMessagesInner(messageExtBatch, cb);
     }
 
+    /**
+     * 该方法通过回调AppendMessageCallback实现数据存储
+     * @param messageExt
+     * @param cb
+     * @return
+     */
     public AppendMessageResult appendMessagesInner(final MessageExt messageExt, final AppendMessageCallback cb) {
         assert messageExt != null;
         assert cb != null;
@@ -228,9 +251,9 @@ public class MappedFile extends ReferenceResource {
     }
 
     public boolean appendMessage(final byte[] data) {
-        int currentPos = this.wrotePosition.get();
+        int currentPos = this.wrotePosition.get();//找出当前要的写入位置
 
-        if ((currentPos + data.length) <= this.fileSize) {
+        if ((currentPos + data.length) <= this.fileSize) {//如果当前位置加上要写入的数据大小小于等于文件大小,则说明剩余空间足够写入
             try {
                 this.fileChannel.position(currentPos);
                 this.fileChannel.write(ByteBuffer.wrap(data));
@@ -297,12 +320,13 @@ public class MappedFile extends ReferenceResource {
     }
 
     public int commit(final int commitLeastPages) {
+    	//我们要往文件里面存的内容都是先保存在writeBuffer里面了
         if (writeBuffer == null) {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
             return this.wrotePosition.get();
         }
         if (this.isAbleToCommit(commitLeastPages)) {
-            if (this.hold()) {
+            if (this.hold()) {//状态记录
                 commit0(commitLeastPages);
                 this.release();
             } else {
@@ -325,6 +349,8 @@ public class MappedFile extends ReferenceResource {
 
         if (writePos - this.committedPosition.get() > 0) {
             try {
+            	//TODO 这里有一个疑问,这里是只写到channel里面了?还是真正的写入到了文件呢?
+            	//这里不保证真正的写入文件了,调用fileChannel.force()或者mappedByteBuffer.force(),才保证数据真正的落地
                 ByteBuffer byteBuffer = writeBuffer.slice();
                 byteBuffer.position(lastCommittedPosition);
                 byteBuffer.limit(writePos);
@@ -353,17 +379,19 @@ public class MappedFile extends ReferenceResource {
     }
 
     protected boolean isAbleToCommit(final int commitLeastPages) {
-        int flush = this.committedPosition.get();
-        int write = this.wrotePosition.get();
+        int flush = this.committedPosition.get();//文件现在提交(flush)到了什么位置
+        int write = this.wrotePosition.get();//文件被写到了什么位置
 
-        if (this.isFull()) {
+        if (this.isFull()) {//文件有没有满
             return true;
         }
 
         if (commitLeastPages > 0) {
+        	//写入的页-已经提交的页是否大于给定的页
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= commitLeastPages;
         }
 
+        //写入的位置是否大于已经flush的位置
         return write > flush;
     }
 
@@ -379,6 +407,12 @@ public class MappedFile extends ReferenceResource {
         return this.fileSize == this.wrotePosition.get();
     }
 
+    /**
+     * 返回从pos到size的内存映射,用于读取数据
+     * @param pos
+     * @param size
+     * @return
+     */
     public SelectMappedBufferResult selectMappedBuffer(int pos, int size) {
         int readPosition = getReadPosition();
         if ((pos + size) <= readPosition) {
@@ -401,15 +435,24 @@ public class MappedFile extends ReferenceResource {
         return null;
     }
 
+    /*
+     * 随机读操作
+     * 这里是随机读操作的其中一个方法
+     * 读取从指定位置开始的所有消息
+     * 还有一种就是读取指定位置开始的指定消息大小的消息内容
+     * 
+     */
     public SelectMappedBufferResult selectMappedBuffer(int pos) {
         int readPosition = getReadPosition();
         if (pos < readPosition && pos >= 0) {
-            if (this.hold()) {
+            if (this.hold()) {//状态记录
+            	//调用slice和limit方法来获取消息内容
                 ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
                 byteBuffer.position(pos);
                 int size = readPosition - pos;
                 ByteBuffer byteBufferNew = byteBuffer.slice();
                 byteBufferNew.limit(size);
+                //该对象的startOffset变量是读取消息的开始位置加上该文件的起始偏移量
                 return new SelectMappedBufferResult(this.fileFromOffset + pos, byteBufferNew, size, this);
             }
         }

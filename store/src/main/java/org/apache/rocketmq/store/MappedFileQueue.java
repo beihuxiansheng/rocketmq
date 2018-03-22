@@ -29,25 +29,39 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 
+ * 我们在应用层中访问commitlog和consumequeue是通过MappFileQueue来操作MappedFile类的
+ * 
+ * MappedFile由MappedFileQueue管理
+ * 提供了一系列根据offset或者timestamp来查找,定位,删除,清除MappedFile的逻辑
+ * 提供flushedWhere,committedWhere 标记整个队列中flush以及commit的offset
+ * 对 MappedFile 进行封装成文件队列,对上层提供可无限使用的文件容量
+ *
+ *CommitLog : MappedFileQueue : MappedFile = 1 : 1 : N
+ */
 public class MappedFileQueue {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static final Logger LOG_ERROR = LoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
-    private static final int DELETE_FILES_BATCH_MAX = 10;
+    private static final int DELETE_FILES_BATCH_MAX = 10;//一次最多删除的文件数量
 
-    private final String storePath;
+    private final String storePath;//文件队列的存储路径
 
-    private final int mappedFileSize;
+    private final int mappedFileSize;//一个mappedFile文件大小,见MessageStoreConfig.mapedFileSizeCommitLog,默认1G
 
-    private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
+    private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();//写时复制,MappedFileQueue:MappedFile=1:n
 
-    private final AllocateMappedFileService allocateMappedFileService;
+    private final AllocateMappedFileService allocateMappedFileService;//分配mappedFile的线程服务
 
-    private long flushedWhere = 0;
-    private long committedWhere = 0;
+    private long flushedWhere = 0;//已经flush到的位置(是某一个mappedFile中的一个位置)
+    private long committedWhere = 0;//已经commit到的位置(是某一个mappedFile中的一个位置)
 
     private volatile long storeTimestamp = 0;
 
+    /*
+     * 存储路径,文件大小,分配mappedfile服务线程
+     */
     public MappedFileQueue(final String storePath, int mappedFileSize,
         AllocateMappedFileService allocateMappedFileService) {
         this.storePath = storePath;
@@ -55,6 +69,11 @@ public class MappedFileQueue {
         this.allocateMappedFileService = allocateMappedFileService;
     }
 
+    /**
+     * checkSelf完成自检
+     * 检查mappedFiles中,除去最后一个文件,其余每一个mappedFile的大小是否是mappedFileSize
+     * 
+     */
     public void checkSelf() {
 
         if (!this.mappedFiles.isEmpty()) {
@@ -74,6 +93,12 @@ public class MappedFileQueue {
         }
     }
 
+    /**
+     * 获取最后修改时间在timestamp之后的第一个mappedFile,没有的话就返回最后一个mappedFile
+     * 遍历MappedFile,若遇到的文件更新时间大于指定时间,则返回该对象,若找不到则返回最后一个MappedFile对象
+     * @param timestamp
+     * @return
+     */
     public MappedFile getMappedFileByTime(final long timestamp) {
         Object[] mfs = this.copyMappedFiles(0);
 
@@ -101,6 +126,14 @@ public class MappedFileQueue {
         return mfs;
     }
 
+    /**
+     * 遍历整个列表,每个MappedFile对象对应着一个固定大小的文件
+     * 当文件的起始偏移量fileFromOffset<=offset<=fileFromOffset+fileSize
+     * 则表示指定的位置偏移量 offset 落在的该文件上
+     * 则将对应的 MapedFile对象的 wrotepostion和commitPosition设置为 offset%fileSize(求余,目的为了获取当前file的读写位置)
+     * 若文件的起始偏移量fileFromOffset>offset,即是命中的文件之后的文件,则将这些文件删除并且从 MappFileQueue 的 MapedFile 列表中清除掉。
+     * @param offset
+     */
     public void truncateDirtyFiles(long offset) {
         List<MappedFile> willRemoveFiles = new ArrayList<MappedFile>();
 
@@ -176,6 +209,13 @@ public class MappedFileQueue {
         return true;
     }
 
+    /**
+     * 统计内存数据中还未刷盘的大小
+     * 调用 getLastMappedFile方法获取 Mapped队列中最后一个 MapedFile对象
+     * 计算得出未刷盘的消息大小
+     * 计算公式为:最后一个 MappedFile对象fileFromOffset+写入位置 wrotepostion-commitedWhere(上次刷盘的位置)
+     * @return
+     */
     public long howMuchFallBehind() {
         if (this.mappedFiles.isEmpty())
             return 0;
@@ -191,27 +231,51 @@ public class MappedFileQueue {
         return 0;
     }
 
+    /**
+     * 有几种形式
+     * 1.返回mappedFiles中最后一个mappedFile
+     * 2.如果mappedFiles为空,根据startOffset以及needCreate判断是否需要创建出来最新的mappedFile
+     * 3.如果mappedFiles最后一个写满了,根据needCreate判断是否需要创建出来最新的mappedFile
+     * 获取最后一个 MappedFile,若不存在或文件已满,则进行创建
+     * @param startOffset
+     * @param needCreate
+     * @return
+     */
     public MappedFile getLastMappedFile(final long startOffset, boolean needCreate) {
+    	//创建文件开始offset,为-1时,不创建
         long createOffset = -1;
         MappedFile mappedFileLast = getLastMappedFile();
 
         if (mappedFileLast == null) {
+        	 //一个映射文件都不存在,这里之所以取余后然后相减,是因为为了对齐,使得都是以mappedFileSize为步长进行往上增长
             createOffset = startOffset - (startOffset % this.mappedFileSize);
         }
 
+        // 最后一个文件已满
         if (mappedFileLast != null && mappedFileLast.isFull()) {
+        	//通过这里你可以知道这个offset是所有文件的offse,而不是一个mappedfile的offset
             createOffset = mappedFileLast.getFileFromOffset() + this.mappedFileSize;
         }
 
         if (createOffset != -1 && needCreate) {
+        	//计算文件名,从此处我们可 以得知,MappedFile的文件命名规则:
+        	//00000001000000000000 00100000000000000000 09000000000020000000二十位
+        	//文件命名方式:fileName[n] = fileName[n - 1] + mappedFileSize。在 CommitLog 里默认为 1GB
             String nextFilePath = this.storePath + File.separator + UtilAll.offset2FileName(createOffset);
+            //下一个文件的地址都算出来了,也对,就新建的时候可以直接加一个mapedfilesize来计算,就是1g:1024*1024*1024
             String nextNextFilePath = this.storePath + File.separator
                 + UtilAll.offset2FileName(createOffset + this.mappedFileSize);
             MappedFile mappedFile = null;
 
+            //两种方式创建文件
             if (this.allocateMappedFileService != null) {
+            	//若在Broker启动初始化的时候会创建了后台服务线程(AllocateMapedFileService 服务),则调用
+            	//AllocateMappedFileService.putRequestAndReturnMapedFile方法,在该方法中用下一个文件的文件路径,下下一个文件的路径,文件大小为参数初始化
+            	//AllocateRequest对象,并放入该服务线程的requestQueue:PriorityBlockingQueue<AllocateRequest>变量中,由该线程在
+            	//后台监听 requestQueue 队列,若该队列中存在 AllocateRequest对象,则利用该对象的变量值创建 MappedFile 对象(即在磁盘中生成了对应的物理文件)并
+            	//存入AllocateRequest对象的 MappedFile变量中,并且在下一个新文件之后继续将下下一个新文件也创建了
                 mappedFile = this.allocateMappedFileService.putRequestAndReturnMappedFile(nextFilePath,
-                    nextNextFilePath, this.mappedFileSize);
+                    nextNextFilePath, this.mappedFileSize);//创建nextFilePath,并将nextNextFilePath放入队列,以便异步处理
             } else {
                 try {
                     mappedFile = new MappedFile(nextFilePath, this.mappedFileSize);
@@ -220,6 +284,7 @@ public class MappedFileQueue {
                 }
             }
 
+            //最后将创建或返回的 MappedFile对象存入mappedFiles的 MappedFile列表中,并返回该 MappedFile给对象给调用者
             if (mappedFile != null) {
                 if (this.mappedFiles.isEmpty()) {
                     mappedFile.setFirstCreateInQueue(true);
@@ -242,6 +307,7 @@ public class MappedFileQueue {
 
         while (!this.mappedFiles.isEmpty()) {
             try {
+            	// 如果存在MappedFile对象，则获取最后一个private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
                 mappedFileLast = this.mappedFiles.get(this.mappedFiles.size() - 1);
                 break;
             } catch (IndexOutOfBoundsException e) {
@@ -299,14 +365,26 @@ public class MappedFileQueue {
         return -1;
     }
 
+    /**
+     * 获取最大偏移量
+     * 即最后一个MappedFile允许读到的位置
+     * 实际上就是commit的位置
+     * @return
+     */
     public long getMaxOffset() {
         MappedFile mappedFile = getLastMappedFile();
         if (mappedFile != null) {
-            return mappedFile.getFileFromOffset() + mappedFile.getReadPosition();
+            return mappedFile.getFileFromOffset() + mappedFile.getReadPosition();//相对偏移 + 允许读到的位置
         }
         return 0;
     }
 
+    /**
+     * wrote到的位置
+     * 获取最大写的位置
+     * 即最后一个MappedFile写到的位置
+     * @return
+     */
     public long getMaxWrotePosition() {
         MappedFile mappedFile = getLastMappedFile();
         if (mappedFile != null) {
@@ -315,10 +393,22 @@ public class MappedFileQueue {
         return 0;
     }
 
+    /**
+     * wrote到的位置,到queue中记录的commit的位置之差
+     * 还有多少字节等待commit的
+     * 即wrote与commit位置之差
+     * @return
+     */
     public long remainHowManyDataToCommit() {
         return getMaxWrotePosition() - committedWhere;
     }
 
+    /**
+     * commit到的位置,到queue中记录的flush的位置之差
+     * 还有多少字节等待flush的
+     * 即flush与commit位置之差
+     * @return
+     */
     public long remainHowManyDataToFlush() {
         return getMaxOffset() - flushedWhere;
     }
@@ -490,6 +580,10 @@ public class MappedFileQueue {
         return null;
     }
 
+    /**
+     * 返回mappedFiles队列中的第一个文件
+     * @return
+     */
     public MappedFile getFirstMappedFile() {
         MappedFile mappedFileFirst = null;
 
@@ -506,6 +600,11 @@ public class MappedFileQueue {
         return mappedFileFirst;
     }
 
+    /**
+     * 通过offset找到所在的mappedFile
+     * @param offset
+     * @return
+     */
     public MappedFile findMappedFileByOffset(final long offset) {
         return findMappedFileByOffset(offset, false);
     }

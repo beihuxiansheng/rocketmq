@@ -32,6 +32,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 对并发创建MapedFile的请求,转化为串行化操作,并通过ConcurrentHashMap保证并发的对同一路径的创建请求只执行一次
+ * 
+ * AllocateMappedFileService		MappedByteBuffer
+ * 			|							 |
+ * 			|							 |
+ * 			|							 |
+ * PriorityBlockingQueue				 |
+ * 			|							 |
+ * 			|						     |
+ * 			|_______________创建 __________|
+ * 			|							 |
+ * 			|							 |
+ * 			|______________返回 ___________|
+ * 			|							 |
+ * 			|							 |
+ * 			|							 |
+ * AllocateMappedFileService		MappedByteBuffer
+ * 
+ * 
  * Create MappedFile in advance
  */
 public class AllocateMappedFileService extends ServiceThread {

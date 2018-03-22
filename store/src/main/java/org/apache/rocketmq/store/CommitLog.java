@@ -41,6 +41,17 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Store all metadata downtime for recovery, data protection reliability
+ * 针对 MappedFileQueue 的封装使用
+ * 
+ * CommitLog是用于存储真实的物理消息的结构
+ * ConsumeQueue是逻辑队列,仅仅存储了CommitLog的位移而已,真实的存储都在本结构中
+ * commitlog文件的存储地址: $HOME\store\commitlog\${fileName}
+ * 每个文件的大小默认为1G,commitlog的文件名fileName,名字长度为20位,左边补0,剩余为起始偏移量
+ * 比如 00000000000000000000代表了第一个文件,起始偏移量为 0,文件大小为 1G=1073741824
+ * 当这个文件满了,第二个文件名字为 00000000001073741824
+ * 
+ * 
+ * CommitLog : MappedFileQueue : MappedFile = 1 : 1 : N 
  */
 public class CommitLog {
     // Message's MAGIC CODE daa320a7
@@ -48,7 +59,7 @@ public class CommitLog {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     // End of file empty MAGIC CODE cbd43194
     private final static int BLANK_MAGIC_CODE = 0xBBCCDDEE ^ 1880681586 + 8;
-    private final MappedFileQueue mappedFileQueue;
+    private final MappedFileQueue mappedFileQueue;//CommitLog与MappedFileQueue 1:1
     private final DefaultMessageStore defaultMessageStore;
     private final FlushCommitLogService flushCommitLogService;
 
@@ -518,11 +529,20 @@ public class CommitLog {
         return beginTimeInLock;
     }
 
+    /**
+     * 存储消息,主要分3步:
+     * 	a.查找文件(getLastMapedFile)
+     * 	b.写入数据(DefaultAppendMessageCallback)
+     * 	c.刷盘(FlushRealTimeService)
+     * @param msg
+     * @return
+     */
     public PutMessageResult putMessage(final MessageExtBrokerInner msg) {
         // Set the storage time
         msg.setStoreTimestamp(System.currentTimeMillis());
         // Set the message body BODY CRC (consider the most appropriate setting
         // on the client)
+        //消息体,BODY CRC,当broker重启recover时会校验
         msg.setBodyCRC(UtilAll.crc32(msg.getBody()));
         // Back to Results
         AppendMessageResult result = null;
@@ -533,15 +553,19 @@ public class CommitLog {
         int queueId = msg.getQueueId();
 
         final int tranType = MessageSysFlag.getTransactionValue(msg.getSysFlag());
+        //获取消息的 sysflag 字段,检查消息是否是非事务性
         if (tranType == MessageSysFlag.TRANSACTION_NOT_TYPE
             || tranType == MessageSysFlag.TRANSACTION_COMMIT_TYPE) {
             // Delay Delivery
+        	//获取消息延时投递时间级别
             if (msg.getDelayTimeLevel() > 0) {
                 if (msg.getDelayTimeLevel() > this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel()) {
                     msg.setDelayTimeLevel(this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel());
                 }
 
+                //topic值更改为"SCHEDULE_TOPIC_XXXX"
                 topic = ScheduleMessageService.SCHEDULE_TOPIC;
+                //根据延迟级别获取延时消息的队列 ID(queueId 等于延迟级别减去 1)并更改 queueId值
                 queueId = ScheduleMessageService.delayLevel2QueueId(msg.getDelayTimeLevel());
 
                 // Backup real topic, queueId
@@ -568,6 +592,8 @@ public class CommitLog {
             msg.setStoreTimestamp(beginLockTimestamp);
 
             if (null == mappedFile || mappedFile.isFull()) {
+            	//调用 MappedFileQueue.getLastMappedFile方法获取或者创建最后一个文件(即MappedFile列表中的最后一个MappedFile对象)
+            	//若还没有文件或者已有的最后一个文件已经写满则创建一个新的文件,即创建一个新的 MappedFile对象并返回
                 mappedFile = this.mappedFileQueue.getLastMappedFile(0); // Mark: NewFile may be cause noise
             }
             if (null == mappedFile) {
@@ -576,7 +602,15 @@ public class CommitLog {
                 return new PutMessageResult(PutMessageStatus.CREATE_MAPEDFILE_FAILED, null);
             }
 
+            //消息内容写入 MappedFile.mappedByteBuffer:MappedByteBuffer对象
+            //即写入消息缓存中,由后台服务线程定时的将缓存中的消息刷盘到物理文件中
             result = mappedFile.appendMessage(msg, this.appendMessageCallback);
+            /*
+             * 若最后一个 MappedFile剩余空间不足够写入此次的消息内容,即返回状态为END_OF_FILE标记, 则再次调用 MappedFileQueue.getLastMapedFile方法获取新的 MapedFile对象然后调用 MapepdFile.appendMessage方法重写写入
+             * 最后继续执行后续处理操作
+             * 若为 PUT_OK标记则继续后续处理
+             * 若为其他标记则返回错误信息给上层
+             */
             switch (result.getStatus()) {
                 case PUT_OK:
                     break;
@@ -636,6 +670,8 @@ public class CommitLog {
             final GroupCommitService service = (GroupCommitService) this.flushCommitLogService;
             if (messageExt.isWaitStoreMsgOK()) {
                 GroupCommitRequest request = new GroupCommitRequest(result.getWroteOffset() + result.getWroteBytes());
+                //将该对象存入 GroupCommitService.requestsWrite写请求队列中
+                //该线程的 doCommit方法中遍历读队列的数据,检查MapedFileQueue.committedWhere(刷盘刷到哪里的记录)
                 service.putRequest(request);
                 boolean flushOK = request.waitForFlush(this.defaultMessageStore.getMessageStoreConfig().getSyncFlushTimeout());
                 if (!flushOK) {
@@ -648,6 +684,7 @@ public class CommitLog {
             }
         }
         // Asynchronous flush
+        //若该 Broker为异步刷盘(ASYNC_FLUSH),唤醒 FlushRealTimeService线程服务
         else {
             if (!this.defaultMessageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
                 flushCommitLogService.wakeup();
@@ -1180,7 +1217,7 @@ public class CommitLog {
             final MessageExtBrokerInner msgInner) {
             // STORETIMESTAMP + STOREHOSTADDRESS + OFFSET <br>
 
-            // PHY OFFSET
+            // PHY OFFSET物理位移
             long wroteOffset = fileFromOffset + byteBuffer.position();
 
             this.resetByteBuffer(hostHolder, 8);
@@ -1302,6 +1339,7 @@ public class CommitLog {
 
             final long beginTimeMills = CommitLog.this.defaultMessageStore.now();
             // Write messages to the queue buffer
+            //其实在走完下面这一步,commitlog文件夹下面的对应的mappedfiles里面的某一个mappedfile就把message添加到文件里面去了,如果message不是很大的话
             byteBuffer.put(this.msgStoreItemMemory.array(), 0, msgLen);
 
             AppendMessageResult result = new AppendMessageResult(AppendMessageStatus.PUT_OK, wroteOffset, msgLen, msgId,

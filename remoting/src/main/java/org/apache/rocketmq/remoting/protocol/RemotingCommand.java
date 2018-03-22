@@ -31,15 +31,6 @@ import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- *	 4 				 4
-	length 		header length 		header data 		body data
-	1. 大端 4 个字节整数，等于 2、3、4 长度总和
-	2. 大端 4 个字节整数，等于 3 的长度
-	3. 使用 json 序列化数据
-	4. 应用自定义二进制序列化数据
- *
- */
 public class RemotingCommand {
     public static final String SERIALIZE_TYPE_PROPERTY = "rocketmq.serialize.type";
     public static final String SERIALIZE_TYPE_ENV = "ROCKETMQ_SERIALIZE_TYPE";
@@ -162,7 +153,7 @@ public class RemotingCommand {
         RemotingCommand cmd = headerDecode(headerData, getProtocolType(oriHeaderLen));
 
         int bodyLength = length - 4 - headerLength;
-        System.out.println("解码操作,去掉第一段总长度占位符以及header头部占位符以及headerData长度后的 ByteBuffer limit size is " + length );
+        System.out.println("解码操作,去掉第一段总长度占位符以及header头部占位符以及headerData长度后的 ByteBuffer limit size is " + bodyLength );
         byte[] bodyData = null;
         if (bodyLength > 0) {
             bodyData = new byte[bodyLength];
@@ -223,9 +214,81 @@ public class RemotingCommand {
         byte[] result = new byte[4];
 
         result[0] = type.getCode();
+        /**
+         * 
+         * https://stackoverflow.com/questions/2811319/difference-between-and
+         * 
+         * >> is arithmetic shift right, >>> is logical shift right.
+         * In an arithmetic shift, the sign bit is extended to preserve the signedness of the number.
+         * 
+         * >> is arithmetic shift right, >>> is logical shift right.
+
+			In an arithmetic shift, the sign bit is extended to preserve the signedness of the number.
+
+			For example: -2 represented in 8 bits would be 11111110 (because the most significant bit has negative weight). 
+			Shifting it right one bit using arithmetic shift would give you 11111111, or -1. 
+			Logical right shift, however, does not care that the value could possibly represent a signed number; 
+			it simply moves everything to the right and fills in from the left with 0s. 
+			Shifting our -2 right one bit using logical shift would give 01111111.
+         * 
+         * >>> will always put a 0 in the left most bit, while >> will put a 1 or a 0 depending on what the sign of it is.
+         * 
+         * >>> is unsigned-shift; it'll insert 0. >> is signed, and will extend the sign bit
+         * 注意上面说的insert 0 和 extend the sign bit
+         * 
+         * The value of n>>s is n right-shifted s bit positions with sign-extension.
+         * The value of n>>>s is n right-shifted s bit positions with zero-extension
+         * 
+         * 
+         *  System.out.printf("%32s%n",Integer.toBinaryString(-1));
+			//11111111111111111111111111111111
+			System.out.printf("%32s%n",Integer.toBinaryString(-1 >> 16));
+			//11111111111111111111111111111111
+			System.out.printf("%32s%n",Integer.toBinaryString(-1 >>> 16));
+			//1111111111111111
+			System.out.printf("%32s%n",Integer.toBinaryString(1));
+			//1
+			System.out.printf("%32s%n",Integer.toBinaryString(1 >> 16));
+			//0
+			System.out.printf("%32s%n",Integer.toBinaryString(1 >>> 16));
+			//0
+			System.out.printf("%32s%n",Integer.toBinaryString(-128));
+			//11111111111111111111111110000000
+			System.out.printf("%32s%n",Integer.toBinaryString(-128 >> 16));
+			//11111111111111111111111111111111
+			System.out.printf("%32s%n",Integer.toBinaryString(-128 >>> 16));
+			//1111111111111111
+			System.out.printf("%32s%n",Integer.toBinaryString(128));
+			//10000000
+			System.out.printf("%32s%n",Integer.toBinaryString(128 >> 16));
+			//0
+			System.out.printf("%32s%n",Integer.toBinaryString(128 >> 16) & 0xFF);
+			//0000 0000 0000 0000 0000 0000 0000 0000
+			 &                              1111 1111
+			 ----------------------------------------
+			  0000 0000 0000 0000 0000 0000 0000 0000
+			System.out.printf("%32s%n",Integer.toBinaryString(128 >>> 16));
+			//0
+			System.out.printf("%32s%n",Integer.toBinaryString(121));
+			// prints "1111001"
+			System.out.printf("%32s%n",Integer.toBinaryString(121 >> 1));
+			// prints "111100"
+			System.out.printf("%32s%n",Integer.toBinaryString(121 >>> 1));
+			// prints "111100"
+			System.out.printf("%32s%n",Integer.toBinaryString(-2 >> 1));
+			//11111111111111111111111111111111
+			System.out.printf("%32s%n",Integer.toBinaryString(-2 >>> 1));
+			// 1111111111111111111111111111111
+		
+         * 坐移右补0就行了
+         * 其实左移和右移都可以用来做(数学)计算
+         * 
+         * 左右移位,然后和0xFF这样的数来进行&运算,其实是为了取这个数的其中某些位,&0xFF,主要是为了让其他无关紧要的位置为0
+		 * 
+         */
         result[1] = (byte) ((source >> 16) & 0xFF);
-        result[2] = (byte) ((source >> 8) & 0xFF);
-        result[3] = (byte) (source & 0xFF);
+        result[2] = (byte) ((source >> 8) & 0xFF);//
+        result[3] = (byte) (source & 0xFF);//
         return result;
     }
 
@@ -399,6 +462,11 @@ public class RemotingCommand {
         return result;
     }
 
+    /**
+     * 这里encode的是this对象,但是为何叫headerEncode呢?
+     * 因为我们的body对象被transient修饰了,因此不参与这次的序列化
+     * @return
+     */
     private byte[] headerEncode() {
         this.makeCustomHeaderToNet();
         if (SerializeType.ROCKETMQ == serializeTypeCurrentRPC) {
