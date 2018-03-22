@@ -84,6 +84,7 @@ public class RemotingCommand {
     private int opaque = requestId.getAndIncrement();
     private int flag = 0;
     private String remark;
+    //这里写成HashMap,而不是Map的原因是?   Map没有实现序列化?
     private HashMap<String, String> extFields;
     private transient CommandCustomHeader customHeader;
 
@@ -162,7 +163,7 @@ public class RemotingCommand {
         RemotingCommand cmd = headerDecode(headerData, getProtocolType(oriHeaderLen));
 
         int bodyLength = length - 4 - headerLength;
-        System.out.println("解码操作,去掉第一段总长度占位符以及header头部占位符以及headerData长度后的 ByteBuffer limit size is " + length );
+        System.out.println("解码操作,去掉第一段总长度占位符以及header头部占位符以及headerData长度后的 ByteBuffer limit size is " + bodyLength );
         byte[] bodyData = null;
         if (bodyLength > 0) {
             bodyData = new byte[bodyLength];

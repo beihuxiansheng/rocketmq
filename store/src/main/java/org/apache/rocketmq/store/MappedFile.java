@@ -205,6 +205,7 @@ public class MappedFile extends ReferenceResource {
         int currentPos = this.wrotePosition.get();
 
         if (currentPos < this.fileSize) {
+        	//这里是关键的关键
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
             byteBuffer.position(currentPos);
             AppendMessageResult result = null;
@@ -228,6 +229,7 @@ public class MappedFile extends ReferenceResource {
     }
 
     public boolean appendMessage(final byte[] data) {
+    	//这里用到了一个另外的变量来跟踪已经写了多少,其实如果不用另外的变量跟踪也ok,只不过每次过来的时候都直接查一下fileChannel现在写到什么位置了,如果有这样的方法的话
         int currentPos = this.wrotePosition.get();
 
         if ((currentPos + data.length) <= this.fileSize) {
@@ -277,6 +279,13 @@ public class MappedFile extends ReferenceResource {
 
                 try {
                     //We only append data to fileChannel or mappedByteBuffer, never both.
+                	
+                	//When reading or writing to a FileChannel you do so at a specific position.
+                	//You can obtain the current position of the FileChannel object by calling the position() method
+                	//You can also set the position of the FileChannel by calling the position(long pos) method.
+                	//Here are two examples:
+                	//long pos channel.position();
+                	//channel.position(pos +123);
                     if (writeBuffer != null || this.fileChannel.position() != 0) {
                         this.fileChannel.force(false);
                     } else {
