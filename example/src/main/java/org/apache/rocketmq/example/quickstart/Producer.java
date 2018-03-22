@@ -60,7 +60,7 @@ public class Producer {
                  */
                 Message msg = new Message("price" /* Topic */,
                     "TagA" /* Tag */,
-                    ("Hello RocketMQ " + 1).getBytes(RemotingHelper.DEFAULT_CHARSET) /* Message body */
+                    ("Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ v v  Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ v Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ v v  Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ Hello RocketMQ v " + i).getBytes(RemotingHelper.DEFAULT_CHARSET) /* Message body */
                 );
 
                 /*
@@ -70,6 +70,7 @@ public class Producer {
 
                 System.out.printf("%s%n", sendResult);
                 System.out.println("producer端成功的接收到远端发送过来的请求啦!那么就表明这次消息发送成功!");
+//                Thread.sleep(60000);
                 Thread.sleep(5000);
             } catch (Exception e) {
                 e.printStackTrace();

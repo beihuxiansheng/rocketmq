@@ -72,13 +72,13 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
                 if (requestHeader == null) {
                     return null;
                 }
-                // 发送请求Context。在 hook 场景下使用
+                //发送请求Context,在 hook 场景下使用
                 mqtraceContext = buildMsgContext(ctx, requestHeader);
-                // hook：处理发送消息前逻辑
+                //hook：处理发送消息前逻辑
                 this.executeSendMessageHookBefore(ctx, request, mqtraceContext);
 
                 RemotingCommand response;
-                // 处理发送消息逻辑
+                //处理发送消息逻辑
                 if (requestHeader.isBatch()) {
                     response = this.sendBatchMessage(ctx, request, mqtraceContext, requestHeader);
                 } else {
@@ -308,14 +308,14 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
 
         log.debug("receive SendMessage request command, {}", request);
 
-        // 如果未开始接收消息,也就是broker还没有准备好,抛出系统异常
+        //如果未开始接收消息,也就是broker还没有准备好,抛出系统异常
         final long startTimstamp = this.brokerController.getBrokerConfig().getStartAcceptSendRequestTimeStamp();
         if (this.brokerController.getMessageStore().now() < startTimstamp) {
             response.setCode(ResponseCode.SYSTEM_ERROR);
             response.setRemark(String.format("broker unable to service, until %s", UtilAll.timeMillisToHumanString2(startTimstamp)));
             return response;
         }
-        // 消息配置(Topic配置）校验
+        //消息配置(Topic配置）校验
         response.setCode(-1);
         super.msgCheck(ctx, requestHeader, response);
         if (response.getCode() != -1) {

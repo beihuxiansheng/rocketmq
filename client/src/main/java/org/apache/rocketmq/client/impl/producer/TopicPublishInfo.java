@@ -75,11 +75,13 @@ public class TopicPublishInfo {
                 int pos = Math.abs(index++) % this.messageQueueList.size();
                 if (pos < 0)
                     pos = 0;
+                //重试的时候,选择一个和上次不同的broker
                 MessageQueue mq = this.messageQueueList.get(pos);
                 if (!mq.getBrokerName().equals(lastBrokerName)) {
                     return mq;
                 }
             }
+            //如果找不到和上次要发送到的broker不同的broker,那么就还是用这个broker,只是选择这个broker下的不同的MessageQueue(其实是queueid不同)
             return selectOneMessageQueue();
         }
     }

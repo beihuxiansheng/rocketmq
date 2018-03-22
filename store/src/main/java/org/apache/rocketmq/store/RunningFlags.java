@@ -70,11 +70,11 @@ public class RunningFlags {
     }
 
     public boolean isWriteable() {
-    	System.out.println("flagBits is " + flagBits);
-    	System.out.println("not_writeable_bit is " + NOT_WRITEABLE_BIT);
-    	System.out.println("write_logics_queue_error_bit is " + WRITE_LOGICS_QUEUE_ERROR_BIT);
-    	System.out.println("disk_full_bit is " + DISK_FULL_BIT);
-    	System.out.println("write_index_file_error_bit is " + WRITE_INDEX_FILE_ERROR_BIT);
+//    	System.out.println("flagBits is " + flagBits);
+//    	System.out.println("not_writeable_bit is " + NOT_WRITEABLE_BIT);
+//    	System.out.println("write_logics_queue_error_bit is " + WRITE_LOGICS_QUEUE_ERROR_BIT);
+//    	System.out.println("disk_full_bit is " + DISK_FULL_BIT);
+//    	System.out.println("write_index_file_error_bit is " + WRITE_INDEX_FILE_ERROR_BIT);
         if ((this.flagBits & (NOT_WRITEABLE_BIT | WRITE_LOGICS_QUEUE_ERROR_BIT | DISK_FULL_BIT | WRITE_INDEX_FILE_ERROR_BIT)) == 0) {
             return true;
         }

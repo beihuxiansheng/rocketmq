@@ -18,6 +18,10 @@ package org.apache.rocketmq.store;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * MappedFile的父类,改类的作用是记录MappedFile中的引用次数,为正表示资源可用,刷盘前加1,然后将wrotePosotion的值赋给commitedPosotion,再减一
+ *
+ */
 public abstract class ReferenceResource {
     protected final AtomicLong refCount = new AtomicLong(1);
     protected volatile boolean available = true;
